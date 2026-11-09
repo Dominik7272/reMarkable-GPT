@@ -1,0 +1,6 @@
+{
+  "name": "remarkable-notebook-chat",
+  "private": true,
+  "scripts": {"build:math": "node tools/build_math.cjs"},
+  "devDependencies": {"esbuild": "0.25.5", "mathjax-full": "3.2.2"}
+}

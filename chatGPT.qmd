@@ -1,0 +1,169 @@
+VERSION 3.29.1.0
+
+AFFECT /qml/device/view/documentview/DocumentView.qml
+    TRAVERSE FocusScope#root
+        LOCATE BEFORE ALL
+        INSERT {
+            function openChatGPT() {
+                if (!root.document || root.isLoading) return;
+                toolbar.closeFoldout();
+                chatGPTLoader.active = true;
+                if (chatGPTLoader.status === Loader.Ready) chatGPTLoader.item.open();
+            }
+            // Temporary bindings restore the existing dialog expressions,
+            // including other mods, when the chat closes.
+            Binding {
+                target: root
+                property: "subDialogOpen"
+                when: chatGPTLoader.item?.opened ?? false
+                value: true
+                restoreMode: Binding.RestoreBindingOrValue
+            }
+            Binding {
+                target: root
+                property: "fullscreenSubDialogOpen"
+                when: chatGPTLoader.item?.opened ?? false
+                value: true
+                restoreMode: Binding.RestoreBindingOrValue
+            }
+            PenInputBlocker {
+                anchors.fill: parent
+                z: 21000
+                visible: chatGPTLoader.item?.opened ?? false
+                manager: root.penInput.surfaceManager
+            }
+            Loader {
+                id: chatGPTLoader
+                anchors.fill: parent
+                z: 21001
+                active: false
+                visible: item?.opened ?? false
+                source: "file:///home/root/xovi/ChatGPT/ChatGPT.qml"
+                onLoaded: {
+                    item.useNativeDisplay = true;
+                    item.documentObject = Qt.binding(function() { return root.document; });
+                    item.documentId = Qt.binding(function() { return root.document ? String(root.document.id) : ""; });
+                    item.documentTitle = Qt.binding(function() { return root.document ? root.document.visibleName : ""; });
+                    item.currentPageIndex = Qt.binding(function() { return root.currentPage; });
+                    item.currentPageId = Qt.binding(function() { return String(root.currentPageId); });
+                    item.pageCount = Qt.binding(function() { return root.pageCount; });
+                    item.documentLoading = Qt.binding(function() { return root.isLoading; });
+                    item.sceneColorProfile = Qt.binding(function() { return root.colorProfile.sceneRendering; });
+                    item.reader.prepareCapture.connect(function() {
+                        if (sceneController) sceneController.requestDeferredCompleted();
+                    });
+                    item.open();
+                }
+                onStatusChanged: {
+                    if (status === Loader.Error) console.warn("[ChatGPT] Could not load ChatGPT.qml");
+                }
+            }
+            Connections {
+                target: chatGPTLoader.item
+                function onClosed() { chatGraphHandoff.abandon();sceneView.forceActiveFocus(); }
+                function onOpenGraphRequested(state, context) {
+                    if (typeof graphCalcLoader === "undefined" || !root.notePage || root.isLoading) {
+                        chatGPTLoader.item.creations.errorMessage = "graphCalc is unavailable on this page.";
+                        return;
+                    }
+                    chatGraphHandoff.request = {state:state,context:context,attempts:0};
+                    graphCalcLoader.active = true;
+                    chatGraphHandoff.restart();
+                }
+                function onImageReady(fileUrl, context, contentId) {
+                    const chat = chatGPTLoader.item;
+                    if (!root.document || root.isLoading || !sceneController ||
+                            String(root.document.id) !== context.documentId ||
+                            String(root.currentPageId) !== context.pageId) {
+                        chat.creations.errorMessage = "The page changed. Open the preview again before inserting.";
+                        return;
+                    }
+                    if (!root.notePage || typeof sceneController.insertImageFileAsSceneItem !== "function") {
+                        chat.creations.errorMessage = "Image insertion is unavailable on this page.";
+                        return;
+                    }
+                    if (!String(fileUrl).startsWith("file:///home/root/xovi/ChatGPT/images/content-")) {
+                        chat.creations.errorMessage = "The content image is unavailable.";
+                        return;
+                    }
+                    try {
+                        const position = sceneView.viewToScene(Qt.point(sceneView.width / 2, sceneView.height / 2));
+                        sceneView.endItemSelection();
+                        sceneController.insertImageFileAsSceneItem(fileUrl, position);
+                        chat.contentInserted(contentId);
+                    } catch (error) {
+                        chat.creations.errorMessage = "Could not insert content: " + error;
+                    }
+                }
+            }
+            Timer {
+                id: chatGraphHandoff
+                interval: 50
+                property var request: null
+                function abandon() {
+                    if (request && typeof graphCalcLoader !== "undefined" && graphCalcLoader.item)
+                        graphCalcLoader.item.opened = false;
+                    stop();request = null;
+                }
+                onTriggered: {
+                    const chat = chatGPTLoader.item, pending = request;
+                    if (!pending || !chat || !chat.opened) { abandon();return; }
+                    if (!root.document || root.isLoading || String(root.document.id) !== pending.context.documentId ||
+                            String(root.currentPageId) !== pending.context.pageId) {
+                        abandon();chat.creations.errorMessage = "The page changed. Open the preview again.";return;
+                    }
+                    if (graphCalcLoader.status === Loader.Error || ++pending.attempts > 200) {
+                        abandon();chat.creations.errorMessage = "Could not open graphCalc.";return;
+                    }
+                    const calculator = graphCalcLoader.item;
+                    if (!calculator || !calculator.sessionReady) { restart();return; }
+                    if (typeof calculator.applyState !== "function" || typeof calculator.outputSettings !== "object") {
+                        abandon();chat.creations.errorMessage = "Update graphCalc to open this graph.";return;
+                    }
+                    const previous = calculator.snapshot();
+                    try {
+                        calculator.checkpoint();
+                        calculator.applyState(pending.state);
+                        if (calculator.errorMessage) throw new Error(calculator.errorMessage);
+                        calculator.checkpoint();
+                        request = null;
+                        chat.close();
+                        calculator.open();
+                    } catch (error) {
+                        request = null;calculator.opened = false;
+                        try { calculator.applyState(previous);calculator.checkpoint(); } catch (ignored) {}
+                        chat.creations.errorMessage = "Could not open graph: " + error;
+                    }
+                }
+            }
+        }
+        TRAVERSE Item#_uiContainer
+            LOCATE AFTER ALL
+            INSERT {
+                // This entry point is outside the native toolbar's GridLayout.
+                ArkControls.ToolButton {
+                    id: chatGPTButton
+                    objectName: "chatGPTButton"
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: 24 + (toolbar.shown && toolbar.position === ToolbarPositioner.Position.Right ? toolbar.innerWidth : 0)
+                    anchors.bottomMargin: 24 + (toolbar.shown && toolbar.position === ToolbarPositioner.Position.Bottom ? toolbar.innerHeight : 0)
+                    width: 88
+                    height: 88
+                    visible: root.document && !root.subDialogOpen && !root.isLoading
+                    focusPolicy: Qt.NoFocus
+                    background: Rectangle { color: chatGPTButton.down ? "black" : "white"; border.color: "black"; border.width: 1 }
+                    contentItem: Text {
+                        text: "GPT"
+                        font.pixelSize: 24
+                        color: chatGPTButton.down ? "white" : "black"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: root.openChatGPT()
+                    PenInputBlocker { anchors.fill: parent; manager: root.penInput.surfaceManager }
+                }
+            }
+        END TRAVERSE
+    END TRAVERSE
+END AFFECT

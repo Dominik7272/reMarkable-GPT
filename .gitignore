@@ -1,0 +1,26 @@
+# Generated output and dependencies
+.cache/
+artifacts/
+dist/
+node_modules/
+
+# Python environments and bytecode
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local credentials and environment settings
+config.ini
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs and editor/OS files
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

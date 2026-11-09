@@ -1,0 +1,22 @@
+{
+  "name": "ChatGPT",
+  "version": "0.3.2",
+  "device": "reMarkable Paper Pro",
+  "firmware": "3.29.1.0",
+  "xochitl_sha256": "35e940d8acb3de0dfaf61f1a421d450e61dbaa915f885c818a2a3cc5c94c8ecd",
+  "dependencies": [
+    "xovi",
+    "qt-resource-rebuilder.so",
+    "QtCore",
+    "QtQml.WorkerScript",
+    "Qt SVG image plugin"
+  ],
+  "device_tested": false,
+  "live_api_tested": true,
+  "api_validation": "The actual QML ApiClient and Conversation loop successfully called read_current_page through the configured Codex proxy, returned a synthetic blue PNG as a function_call_output image, and received Blue. No notebook content was sent. Streamed responses, complete function calls and encrypted reasoning are retained between rounds.",
+  "capture": "Native ThumbnailProvider page image encoded directly with Canvas. No Qt item grabs, layers or secondary SceneView. Uses the page overview raster at its native resolution, reduced only above 2048 pixels; quality depends on firmware-generated page images.",
+  "content_validation": "Desktop Qt executes formula, note, table and diagram tool calls, the real offline MathJax worker, SVG rasterisation, transparent and opaque backgrounds, revisions, PNG export only after Insert, document isolation and cancellation. A real API call through the configured proxy successfully generated and locally rendered the quadratic formula. Exact native metadata verifies insertImageFileAsSceneItem(QUrl, QPointF). WorkerScript and SVG modules were checked on the tablet. Chat insertion still requires activation and physical-device verification.",
+  "base_url_validation": "Real Qt settings load a custom baseUrl and propagate subsequent changes into the client. Simulated requests verify the selected host and API path, trailing-slash normalization and complete Responses endpoints. Pure JS checks include local HTTP URLs and reject malformed URLs before a request is created. Existing configuration files are preserved on reinstall.",
+  "validation": "Exact 3.29.1.0 firmware metadata verifies ThumbnailProvider document/page/monochrome properties, its image source, and document page IDs. QMD applies alone and with graphCalc in both orders. Desktop Qt checks exercise native-provider fixtures, PNG encoding, complete long-page rasters, unchanged editing position, autonomous current/other-page tool calls, multiple calls, invalid functions, cancellation, document isolation and compact layouts. Native fonts and separate fast-control/scroll regions are checked. Markdown headings, emphasis, lists, custom tables, code blocks, selection and plain text error reasons are exercised.",
+  "crash_fix": "User logs show Layers are not supported and dont make sense immediately before SIGSEGV during the old Qt item grab. The new capture path removes that unsupported operation. Physical-device capture through the replacement provider still requires activation and on-device verification."
+}
